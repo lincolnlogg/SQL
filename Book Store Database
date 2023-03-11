@@ -1,0 +1,10 @@
+CREATE TABLE books (id INTEGER PRIMARY KEY, name TEXT, genre TEXT, price INTEGER, quantity_sold INTEGER);
+
+INSERT INTO books VALUES(1, "A Court of Thorns & Roses", "Fantasy", 12, 5);
+INSERT INTO books VALUES(2, "A Court of Mist and Fury", "Fantasy", 15, 2);
+INSERT INTO books VALUES(3, "A Court of Wings and Ruin", "Fantasy", 15, 12);
+INSERT INTO books VALUES(4, "A Court of Silver Flames", "Fantasy", 9, 2);
+INSERT INTO books VALUES(5, "Throne of Glass", "Fantasy", 15, 1);
+ 
+SELECT * FROM books ORDER BY quantity_sold;
+SELECT MAX(quantity_sold) from books;
