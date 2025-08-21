@@ -7,4 +7,4 @@ INSERT INTO books VALUES(4, "A Court of Silver Flames", "Fantasy", 9, 2);
 INSERT INTO books VALUES(5, "Throne of Glass", "Fantasy", 15, 1);
  
 SELECT * FROM books ORDER BY quantity_sold;
-SELECT MAX(quantity_sold) from books;
+SELECT MAX(quantity_sold) from bookS;
