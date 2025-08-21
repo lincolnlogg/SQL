@@ -1,0 +1,462 @@
+Summarize one real-world written business report that can be created from the DVD Dataset from the “Labs on Demand Assessment Environment and DVD Database” attachment.   
+
+This report aims to identify the film categories that generate the most revenue for the DVD rental shop. The business will benefit from these insights by reducing costs and avoiding investments in less popular film categories. By knowing which film categories are popular, the business can focus its marketing efforts on these genres to attract more customers and enhance their overall experience, leading to increased rental frequency and customer loyalty. 
+
+ 
+Which film categories make us the most money? 
+
+
+
+Identify the specific fields that will be included in the detailed table and the summary table of the report. 
+
+The following fields will be included in the detail table: 
+
+category_id(INT), name(VARCHAR), rental_duration(INT), 	rental_rate(DECIMAL(4,2)), amount(DECIMAL(5,2)), replacement_cost(DECIMAL(5,2)) 
+
+The following fields will be included in the summary table:	 
+
+name(VARCHAR), rental_rate(DECIMAL(4,2)), amount(DECIMAL(5,2)) 
+
+ 
+
+Describe the types of data fields used for the report. 
+
+Datatypes included will be VARCHAR and DECIMAL 
+
+ 
+
+  Identify at least two specific tables from the given dataset that will provide the data necessary for the detailed table section and the summary table section of the report. 
+
+The detail and summary tables will be utilizing the category, film, and payment tables from the database. 
+
+ 
+
+Identify at least one field in the detailed table section that will require a custom transformation with a user-defined function and explain why it should be transformed (e.g., you might translate a field with a value of N to No and Y to Yes). 
+
+The amount field in the payment table currently shows as number values 		representing amounts, changing this value to format as a currency enhances readability and presentation in reports. 
+
+ 
+
+Explain the different business uses of the detailed table section and the summary table section of the report.   
+
+The detail table will be able to provide an overview of the categories which will include rental replacement cost to determine if items need to be replaced or if more inventories might be needed. While the summary table will only provide the metrics for the most popular categories and how much they bring in. 
+
+ Explain how frequently your report should be refreshed to remain relevant to stakeholders. 
+
+How often the report is refreshed will depend on what the stakeholders intend to use the report for. For example, they could use this to improve inventory management by buying more copies of a popular category and removing unpopular categories from stores. I would suggest a monthly basis based on the max rental duration being 7 days. 
+
+ 
+
+Provide original code for function(s) in text format that perform the transformation(s) you identified in part A4. 
+
+ 
+
+CREATE OR REPLACE FUNCTION currency (amount numeric) 
+
+RETURNS text  
+
+LANGUAGE plpgsql 
+
+AS  
+
+$$ 
+
+BEGIN 
+
+    RETURN '$' || TO_CHAR(amount, 'FM999,999,999,999.99'); 
+
+END; 
+
+$$; 
+
+ 
+
+--Test to show proof that the function works 
+
+SELECT currency (1234.56); 
+
+C. Provide original SQL code in a text format that creates the detailed and summary tables to hold your report table sections. 
+
+CREATE TABLE detailed_table( 
+
+category_id INT , 
+
+name VARCHAR , 
+
+rental_duration INT , 
+
+rental_rate DECIMAL(4,2),  
+
+amount DECIMAL(5,2),  
+
+replacement_cost DECIMAL(5,2) 
+
+); 
+
+CREATE TABLE summary_table ( 
+
+name VARCHAR , 
+
+rental_rate DECIMAL(4,2), 
+
+amount DECIMAL(7,2), 
+
+PRIMARY KEY (name, rental_rate) 
+
+); 
+
+ 
+
+D. Provide an original SQL query in a text format that will extract the raw data needed for the detailed section of your report from the source database. 
+
+--Insert source data into detailed table 
+
+INSERT INTO detailed_table (category_id, name, rental_duration, rental_rate, amount, replacement_cost) 
+
+SELECT  
+
+c.category_id, 
+
+c.name, 
+
+p.amount as payment_amount, 
+
+f.rental_duration, 
+
+f.rental_rate, 
+
+f.replacement_cost 
+
+FROM 
+
+category c 
+
+JOIN   
+
+    film_category fc ON c.category_id = fc.category_id  
+
+JOIN   
+
+    film f ON fc.film_id = f.film_id  
+
+JOIN   
+
+    inventory i ON f.film_id = i.film_id  
+
+JOIN   
+
+    rental r ON i.inventory_id = r.inventory_id  
+
+JOIN   
+
+    payment p ON r.rental_id = p.rental_id  
+
+ORDER BY c.category_id, c.name, p.amount; 
+
+ 
+
+ 
+
+ 
+
+ 
+
+INSERT INTO summary_table (name, rental_rate, amount) 
+
+SELECT   
+
+    category.name AS category_name,   
+
+    film.rental_rate,   
+
+    SUM(payment.amount) AS total_revenue  
+
+FROM  
+
+    category  
+
+JOIN   
+
+    film_category ON category.category_id = film_category.category_id  
+
+JOIN   
+
+    film ON film_category.film_id = film.film_id  
+
+JOIN   
+
+    inventory ON film.film_id = inventory.film_id 
+
+JOIN  
+
+    rental ON inventory.inventory_id = rental.inventory_id  
+
+JOIN   
+
+    payment ON rental.rental_id = payment.rental_id  
+
+GROUP BY   
+
+    category.name,  
+
+    film.rental_rate  
+
+ORDER BY   
+
+    total_revenue DESC; 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+E.  Provide original SQL code in a text format that creates a trigger on the detailed table of the report that will continually update the summary table as data is added to the detailed table. 
+
+-- Create or replace the function to update the summary_table by adding revenue based on name and rental_rate 
+
+CREATE OR REPLACE FUNCTION update_summary_table()   
+
+RETURNS TRIGGER   
+
+LANGUAGE plpgsql   
+
+AS $$   
+
+BEGIN   
+
+    -- Check if the category with the specific rental_rate already exists in the summary_table  
+
+    IF EXISTS (SELECT 1 FROM summary_table WHERE name = NEW.name AND rental_rate = NEW.rental_rate) THEN  
+
+        -- Update the existing category and rental_rate combination by adding the new revenue  
+
+        UPDATE summary_table   
+
+        SET   
+
+            amount = amount + NEW.amount    -- Add the new amount to the existing total  
+
+        WHERE   
+
+            name = NEW.name  
+
+            AND rental_rate = NEW.rental_rate; 
+
+    ELSE  
+
+        -- Insert a new row if the category and rental_rate combination does not exist  
+
+        INSERT INTO summary_table (name, rental_rate, amount)  
+
+        VALUES (NEW.name, NEW.rental_rate, NEW.amount);  
+
+    END IF;  
+
+  
+
+    RETURN NEW;   
+
+END;   
+
+$$;  
+
+  
+
+-- Create the trigger to execute the function after an INSERT or UPDATE on the detailed_table 
+
+CREATE TRIGGER trg_update_summary_table  
+
+AFTER INSERT OR UPDATE ON detailed_table  
+
+FOR EACH ROW   
+
+EXECUTE FUNCTION update_summary_table(); 
+
+-- test code 
+
+INSERT INTO detailed_table (category_id, name, rental_duration, rental_rate, amount, replacement_cost) 
+
+VALUES  
+
+    (1, 'Action', 5, 2.99, 15.00, 20.00); 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+F.  Provide an original stored procedure in a text format that can be used to refresh the data in both the detailed table and summary table. The procedure should clear the contents of the detailed table and summary table and perform the raw data extraction from part D. 
+
+CREATE OR REPLACE PROCEDURE RefreshData() 
+
+LANGUAGE plpgsql 
+
+AS $$ 
+
+BEGIN  
+
+    -- Clears the contents from the detailed table  
+
+    DELETE FROM detailed_table;   
+
+  
+
+    -- Clears the contents from the summary table  
+
+    DELETE FROM summary_table;   
+
+  
+
+    -- Insert Raw data into the detailed table  
+
+    INSERT INTO detailed_table (category_id, name, rental_duration, rental_rate, amount, replacement_cost)  
+
+        SELECT   
+
+            c.category_id,  
+
+            c.name,  
+
+            f.rental_duration,  
+
+            f.rental_rate,  
+
+            p.amount, -- Use p.amount directly, not aliasing it as payment_amount 
+
+            f.replacement_cost  
+
+        FROM  
+
+            category c  
+
+            JOIN film_category fc ON c.category_id = fc.category_id   
+
+            JOIN film f ON fc.film_id = f.film_id   
+
+            JOIN inventory i ON f.film_id = i.film_id   
+
+            JOIN rental r ON i.inventory_id = r.inventory_id   
+
+            JOIN payment p ON r.rental_id = p.rental_id   
+
+        ORDER BY c.category_id, c.name, p.amount;  
+
+  --Update the summary table based on the newly inserted data  
+
+INSERT INTO summary_table (name, rental_rate, amount)  
+
+SELECT   
+
+    c.name AS category_name,   
+
+    f.rental_rate,   
+
+    SUM(p.amount) AS total_revenue  
+
+FROM   
+
+    category c 
+
+    JOIN film_category fc ON c.category_id = fc.category_id  
+
+    JOIN film f ON fc.film_id = f.film_id  
+
+    JOIN inventory i ON f.film_id = i.film_id  
+
+    JOIN rental r ON i.inventory_id = r.inventory_id  
+
+    JOIN payment p ON r.rental_id = p.rental_id  
+
+GROUP BY   
+
+    c.name, f.rental_rate  
+
+ORDER BY   
+
+    total_revenue DESC 
+
+ON CONFLICT (name, rental_rate)  
+
+DO UPDATE SET amount = excluded.amount; 
+
+END $$; 
+
+CALL RefreshData(); 
+
+--To test  
+
+SELECT COUNT(*) FROM detailed_table; 
+
+DELETE FROM detailed_table WHERE name = 'Action'; 
+
+SELECT COUNT(*) FROM detailed_table; 
+
+ 
+
+CALL RefreshData(); 
+
+1.  Identify a relevant job scheduling tool that can be used to automate the stored procedure. 
+
+Since we are using PostgreSQL which doesn’t have a built-in scheduler, we will need to choose one from a few options. One possible option is Agent pgAgent which allows the execution of stored procedures, SQL statements, as well as shell scripts (Dias, 2020). 
+
+ 
+
+G.  Provide a Panopto video recording that includes the presenter and a vocalized demonstration of the functionality of the code used for the analysis 
+
+https://wgu.hosted.panopto.com/Panopto/Pages/Viewer.aspx?id=d929ae41-d613-4ff4-91e0-b1f70114e46e 
+
+ 
+
+H.  Acknowledge all utilized sources, including any sources of third-party code, using in-text citations and references. If no sources are used, clearly declare that no sources were used to support your submission. 
+
+Sources 
+
+Dias, H. (2020). Overview of job scheduling tools for PostgreSQL. Severalnines. https://severalnines.com/blog/overview-job-scheduling-tools-postgresql/ 
+
+ 
+
+ 
+
+ 
+
+ 
